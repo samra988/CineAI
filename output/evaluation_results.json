@@ -1,0 +1,37 @@
+[
+  {
+    "clip_id": 2,
+    "avg_score": 0.32174687003632824,
+    "max_score": 0.8424960861206054,
+    "pct_high_impact": 0.47058823529411764,
+    "final_label": -1
+  },
+  {
+    "clip_id": 3,
+    "avg_score": 0.47876991461905855,
+    "max_score": 0.8549392700195313,
+    "pct_high_impact": 0.6470588235294118,
+    "final_label": 1
+  },
+  {
+    "clip_id": 4,
+    "avg_score": 0.3535166592317469,
+    "max_score": 0.7914302946726481,
+    "pct_high_impact": 0.4117647058823529,
+    "final_label": 1
+  },
+  {
+    "clip_id": 9,
+    "avg_score": 0.3299182087954353,
+    "max_score": 0.8301811676025391,
+    "pct_high_impact": 0.47058823529411764,
+    "final_label": -1
+  },
+  {
+    "clip_id": 10,
+    "avg_score": 0.4215913747899673,
+    "max_score": 0.6626769129435222,
+    "pct_high_impact": 0.6470588235294118,
+    "final_label": 1
+  }
+]

@@ -1,0 +1,20 @@
+{
+  "method": "SVM + LSTM ensemble, pseudo-labels from visual dynamics",
+  "selected_clips": [
+    2,
+    3,
+    4,
+    9,
+    10
+  ],
+  "ordering": "Chronological (narrative flow: build suspense \u2192 climax hint)",
+  "diversity_note": "Top-K from ranked list ensures varied scene types",
+  "emotional_prog": "Low-score clips filtered; kept clips form tension arc",
+  "scores": {
+    "2": 0.582,
+    "3": 0.5817,
+    "4": 0.494,
+    "9": 0.5867,
+    "10": 0.611
+  }
+}
