@@ -2,12 +2,10 @@
 =============================================================================
   INTELLIGENT MOVIE TRAILER GENERATION PIPELINE
 =============================================================================
-  Author        : AI-Generated Pipeline
+  Author        : Samra Sabeen
   GPU Target    : NVIDIA Quadro T2000 (4GB VRAM)
   Clips         : 18 x 10-second .mp4 files (0.mp4 - 17.mp4), silent
   Output        : trailer.mp4, creepy_trailer.mp4, evaluation graph
-  Usage         : Place this script inside your OEL/ folder alongside clips
-                  then run:  python movie_trailer_pipeline.py
 =============================================================================
 
 PIPELINE OVERVIEW
@@ -27,9 +25,9 @@ INSTALL DEPENDENCIES (run once):
 =============================================================================
 """
 
-# ─────────────────────────────────────────────────────────────────────────────
+# =============================================================================
 # 0. IMPORTS & GLOBAL CONFIG
-# ─────────────────────────────────────────────────────────────────────────────
+# =============================================================================
 import os, sys, warnings, random, json, time
 warnings.filterwarnings("ignore")
 
@@ -67,13 +65,13 @@ from transformers import BlipProcessor, BlipForConditionalGeneration
 # Ultralytics YOLO
 from ultralytics import YOLO
 
-# ── Config ────────────────────────────────────────────────────────────────────
-BASE_DIR      = Path(__file__).parent.resolve()   # OEL/ folder
-CLIPS_DIR     = BASE_DIR                           # clips are in same folder
-NUM_CLIPS     = 18                                 # 0.mp4 ... 17.mp4
-CLIP_FPS      = 24                                 # assumed fps
-SAMPLE_FRAMES = 8                                  # frames sampled per clip
-TOP_K         = 5                                  # trailer clips
+# == Config ====================================================================
+BASE_DIR      = Path(__file__).parent.resolve()   
+CLIPS_DIR     = BASE_DIR                          
+NUM_CLIPS     = 18                                
+CLIP_FPS      = 24                                 
+SAMPLE_FRAMES = 8                                  
+TOP_K         = 5                                  
 SEED          = 42
 DEVICE        = "cuda" if torch.cuda.is_available() else "cpu"
 OUTPUT_DIR    = BASE_DIR / "output"
@@ -87,9 +85,9 @@ print(f"  Clips dir : {CLIPS_DIR}")
 print(f"  Output dir: {OUTPUT_DIR}")
 print(f"{'='*60}\n")
 
-# ─────────────────────────────────────────────────────────────────────────────
+# =============================================================================
 # HELPER: safe clip loader
-# ─────────────────────────────────────────────────────────────────────────────
+# =============================================================================
 
 def load_clip_path(clip_id: int) -> Path:
     p = CLIPS_DIR / f"{clip_id}.mp4"
@@ -124,13 +122,13 @@ def sample_frames_from_clip(clip_path: Path, n: int = SAMPLE_FRAMES) -> list:
     return frames[:n]
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+# =============================================================================
 # STEP 1A -- CNN FEATURE EXTRACTION (EfficientNet-B0)
-# ─────────────────────────────────────────────────────────────────────────────
-print("── Step 1A: Loading EfficientNet-B0 for CNN embeddings ...")
+# =============================================================================
+print("== Step 1A: Loading EfficientNet-B0 for CNN embeddings ...")
 
 _effnet = efficientnet_b0(weights=EfficientNet_B0_Weights.DEFAULT)
-_effnet.classifier = nn.Identity()          # strip head → 1280-d embeddings
+_effnet.classifier = nn.Identity()          
 _effnet = _effnet.to(DEVICE).eval()
 
 _tf = T.Compose([
@@ -157,16 +155,15 @@ def extract_cnn_embedding(frames: list) -> np.ndarray:
     return embs.mean(0).cpu().numpy()       # (1280,)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+# =============================================================================
 # STEP 1B -- YOLO11 OBJECT DETECTION FEATURES
-# ─────────────────────────────────────────────────────────────────────────────
-print("── Step 1B: Loading YOLO11-nano for object detection ...")
+# =============================================================================
+print("== Step 1B: Loading YOLO11-nano for object detection ...")
 
 # Download yolo11n.pt automatically on first run
-_yolo = YOLO("yolo11n.pt")   # nano → fits in 4 GB VRAM
+_yolo = YOLO("yolo11n.pt")   
 _yolo.to(DEVICE)
 
-# COCO classes considered "high-impact"
 HIGH_IMPACT_CLASSES = {
     "person", "car", "truck", "bus", "fire", "knife", "gun",
     "bottle", "scissors", "clock", "cell phone", "laptop",
@@ -200,9 +197,9 @@ def extract_yolo_features(frames: list) -> np.ndarray:
     return np.array([avg_det, hi_ratio, avg_conf, density], dtype=np.float32)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+# =============================================================================
 # STEP 1C -- VISUAL DYNAMICS FEATURES (motion + brightness + cuts)
-# ─────────────────────────────────────────────────────────────────────────────
+# =============================================================================
 
 def extract_visual_dynamics(frames: list) -> np.ndarray:
     """
@@ -211,9 +208,9 @@ def extract_visual_dynamics(frames: list) -> np.ndarray:
        scene_cut_score]
 
     WHY:
-    - High motion → chase/fight scenes → high impact
-    - Brightness variance → flashes/explosions → tension
-    - Scene cuts → editing pace → suspense/action indicator
+    - High motion -> chase/fight scenes -> high impact
+    - Brightness variance -> flashes/explosions -> tension
+    - Scene cuts -> editing pace -> suspense/action indicator
     """
     grays = [cv2.cvtColor(f, cv2.COLOR_BGR2GRAY).astype(np.float32)
              for f in frames]
@@ -235,13 +232,13 @@ def extract_visual_dynamics(frames: list) -> np.ndarray:
                     dtype=np.float32)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+# =============================================================================
 # STEP 1 -- FULL FEATURE EXTRACTION PIPELINE
-# ─────────────────────────────────────────────────────────────────────────────
+# =============================================================================
 
 def extract_all_features(clip_id: int) -> np.ndarray:
     """
-    Concatenates CNN (1280) + YOLO (4) + dynamics (5) → 1289-D feature vector.
+    Concatenates CNN (1280) + YOLO (4) + dynamics (5) -> 1289-D feature vector.
     """
     path   = load_clip_path(clip_id)
     frames = sample_frames_from_clip(path)
@@ -251,7 +248,7 @@ def extract_all_features(clip_id: int) -> np.ndarray:
     return np.concatenate([cnn, yolo, dyn])          # (1289,)
 
 
-print("\n── Extracting features for all 18 clips ...")
+print("\n== Extracting features for all 18 clips ...")
 all_features = []
 for i in tqdm(range(NUM_CLIPS), desc="Feature extraction"):
     feat = extract_all_features(i)
@@ -260,9 +257,9 @@ for i in tqdm(range(NUM_CLIPS), desc="Feature extraction"):
 X = np.array(all_features, dtype=np.float32)        # (18, 1289)
 print(f"   Feature matrix shape: {X.shape}")
 
-# ─────────────────────────────────────────────────────────────────────────────
+# =============================================================================
 # STEP 1D -- COMPUTE RAW IMPACT SCORES (heuristic, used for pseudo-labeling)
-# ─────────────────────────────────────────────────────────────────────────────
+# =============================================================================
 # WHY heuristic labels?
 #   We have no ground-truth annotations. We derive pseudo-labels from the
 #   raw features themselves (motion + object density + brightness variance)
@@ -298,7 +295,7 @@ raw_scores = np.array([compute_raw_score(X[i]) for i in range(NUM_CLIPS)])
 rs_min, rs_max = raw_scores.min(), raw_scores.max()
 norm_scores = (raw_scores - rs_min) / (rs_max - rs_min + 1e-8)
 
-# Pseudo-labels: top 50% → +1 (high impact), bottom 50% → -1 (low impact)
+# Pseudo-labels: top 50% -> +1 (high impact), bottom 50% -> -1 (low impact)
 median_score = np.median(norm_scores)
 y = np.where(norm_scores >= median_score, 1, -1).astype(int)
 
@@ -307,10 +304,10 @@ print(f"   High-impact clips (+1): {(y==1).sum()}  |  Low-impact (-1): {(y==-1).
 print(f"   Clip scores: { {i: round(norm_scores[i],3) for i in range(NUM_CLIPS)} }")
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+# =============================================================================
 # STEP 2A -- SVM BASELINE CLASSIFIER
-# ─────────────────────────────────────────────────────────────────────────────
-print("\n── Step 2A: Training SVM baseline ...")
+# =============================================================================
+print("\n== Step 2A: Training SVM baseline ...")
 
 svm_pipeline = Pipeline([
     ("scaler", StandardScaler()),
@@ -331,10 +328,10 @@ svm_probs = svm_pipeline.predict_proba(X)[:, 1]   # P(high-impact)
 print(f"   SVM classification report:\n{classification_report(y, svm_pipeline.predict(X), target_names=['Low(-1)','High(+1)'])}")
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+# =============================================================================
 # STEP 2B -- LSTM TEMPORAL CLASSIFIER
-# ─────────────────────────────────────────────────────────────────────────────
-print("── Step 2B: Training LSTM temporal classifier ...")
+# =============================================================================
+print("== Step 2B: Training LSTM temporal classifier ...")
 
 # We treat the 18 clips as a sequence; LSTM captures temporal ordering.
 # For per-clip evaluation, we use a sliding window of width 3.
@@ -368,7 +365,7 @@ def build_sequences(X_t, window):
 
 Xs, ys_raw, cids = build_sequences(X_tensor, WINDOW)
 # Convert -1/+1 labels to 0/1 for CrossEntropyLoss
-ys = ((ys_raw + 1) // 2).long()     # -1 → 0, +1 → 1
+ys = ((ys_raw + 1) // 2).long()     # -1 -> 0, +1 -> 1
 
 lstm_model = ImpactLSTM(X.shape[1], HIDDEN, DROPOUT).to(DEVICE)
 optimizer  = torch.optim.Adam(lstm_model.parameters(), lr=1e-3,
@@ -422,48 +419,48 @@ for clip_id in range(NUM_CLIPS):
 
 lstm_probs = np.array(lstm_probs_partial)
 
-# ── Ensemble final score
+# == Ensemble final score
 # WHY ensemble? SVM captures global feature patterns; LSTM captures
 # temporal ordering within the movie. Averaging reduces individual bias.
 FINAL_SCORE = 0.5 * svm_probs + 0.5 * lstm_probs
 print(f"\n   Final ensemble scores: { {i: round(FINAL_SCORE[i],3) for i in range(NUM_CLIPS)} }")
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+# =============================================================================
 # STEP 3 -- TRAILER CLIP SELECTION (Top-5 with narrative ordering)
-# ─────────────────────────────────────────────────────────────────────────────
-print("\n── Step 3: Selecting TOP-5 clips for trailer ...")
+# =============================================================================
+print("\n== Step 3: Selecting TOP-5 clips for trailer ...")
 
 ranked = np.argsort(FINAL_SCORE)[::-1]          # highest score first
 top5_unordered = list(ranked[:TOP_K])
 
 # Narrative ordering: sort selected clips by original clip_id
-# WHY? Preserves chronological story flow: setup → tension → climax hint
+# WHY? Preserves chronological story flow: setup -> tension -> climax hint
 top5 = sorted(top5_unordered)
 
 print(f"   Top-5 clip IDs (score-ranked): {top5_unordered}")
 print(f"   Top-5 clip IDs (narrative):    {top5}")
 print(f"   Scores: { {i: round(FINAL_SCORE[i], 3) for i in top5} }")
 
-# ── Justification stored as metadata
+# == Justification stored as metadata
 # -- Justification stored as metadata
 selection_meta = {
     "method"           : "SVM + LSTM ensemble, pseudo-labels from visual dynamics",
     "selected_clips"   : [int(i) for i in top5],  # Explicitly cast to Python int
-    "ordering"         : "Chronological (narrative flow: build suspense → climax hint)",
+    "ordering"         : "Chronological (narrative flow: build suspense -> climax hint)",
     "diversity_note"   : "Top-K from ranked list ensures varied scene types",
     "emotional_prog"   : "Low-score clips filtered; kept clips form tension arc",
     "scores"           : {int(i): round(float(FINAL_SCORE[i]), 4) for i in top5}, # Cast both key and value
 }
 with open(OUTPUT_DIR / "selection_metadata.json", "w") as f:
     json.dump(selection_meta, f, indent=2)
-print(f"   Metadata saved → output/selection_metadata.json")
+print(f"   Metadata saved -> output/selection_metadata.json")
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+# =============================================================================
 # STEP 4 -- CREEPY THEME TRANSFORMATION
-# ─────────────────────────────────────────────────────────────────────────────
-print("\n── Step 4: Applying creepy visual transformations ...")
+# =============================================================================
+print("\n== Step 4: Applying creepy visual transformations ...")
 
 def apply_glowing_red_eyes(frame: np.ndarray,
                             box: np.ndarray) -> np.ndarray:
@@ -506,7 +503,7 @@ def apply_creepy_frame(frame: np.ndarray,
 
     # 1. Desaturate background
     hsv = cv2.cvtColor(out, cv2.COLOR_BGR2HSV).astype(np.float32)
-    hsv[:,:,1] *= 0.35          # reduce saturation → grey/fog
+    hsv[:,:,1] *= 0.35          # reduce saturation -> grey/fog
     hsv = np.clip(hsv, 0, 255).astype(np.uint8)
     out = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
 
@@ -530,7 +527,7 @@ def apply_creepy_frame(frame: np.ndarray,
             out[band_start:band_start+10, :] = np.roll(
                 out[band_start:band_start+10, :], shift, axis=1)
 
-    # 5. Vignette (dark corners → creepy focus)
+    # 5. Vignette (dark corners -> creepy focus)
     rows, cols = out.shape[:2]
     sigma = 0.55 * min(rows, cols)
     cx, cy = cols // 2, rows // 2
@@ -576,13 +573,13 @@ creepy_paths = []
 for cid in tqdm(top5, desc="Creepy transform"):
     p = transform_clip_creepy(cid)
     creepy_paths.append(p)
-    print(f"   Clip {cid} → {p}")
+    print(f"   Clip {cid} -> {p}")
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# STEP 5 -- NLP CAPTION GENERATION (BLIP + creepy rewrite via Claude API)
-# ─────────────────────────────────────────────────────────────────────────────
-print("\n── Step 5: Generating NLP captions ...")
+# =============================================================================
+# STEP 5 -- NLP CAPTION GENERATION (BLIP + creepy rewrite)
+# =============================================================================
+print("\n== Step 5: Generating NLP captions ...")
 
 # Load BLIP
 print("   Loading BLIP base model ...")
@@ -697,12 +694,12 @@ with open(OUTPUT_DIR / "captions.json", "w") as f:
     json.dump(clip_captions, f, indent=2)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+# =============================================================================
 # STEP 3 (continued) -- ASSEMBLE TRAILER WITH CAPTIONS (pure OpenCV)
-# ─────────────────────────────────────────────────────────────────────────────
-print("\n── Assembling trailer ...")
+# =============================================================================
+print("\n== Assembling trailer ...")
 
-# ── OpenCV caption helpers ────────────────────────────────────────────────────
+# == OpenCV caption helpers ====================================================
 
 def wrap_text(text: str, max_chars: int = 42) -> list:
     """
@@ -754,7 +751,7 @@ def draw_caption_on_frame(frame: np.ndarray,
     bar_y1     = h - block_h - 24
     bar_y2     = h - 8
 
-    # ── Alpha (fade in / fade out) ────────────────────────────────────────────
+    # == Alpha (fade in / fade out) ============================================
     fade_frames = max(1, int(0.5 * 24))          # ~0.5 s at ~24 fps
     rel = frame_idx - start_frame
     if rel < fade_frames:
@@ -765,12 +762,12 @@ def draw_caption_on_frame(frame: np.ndarray,
         alpha = 1.0
     alpha = max(0.0, min(1.0, alpha))
 
-    # ── Semi-transparent dark bar ─────────────────────────────────────────────
+    # == Semi-transparent dark bar =============================================
     overlay = out.copy()
     cv2.rectangle(overlay, (0, bar_y1), (w, bar_y2), (10, 10, 10), -1)
     out = cv2.addWeighted(overlay, 0.55 * alpha, out, 1 - 0.55 * alpha, 0)
 
-    # ── Draw each line of text ────────────────────────────────────────────────
+    # == Draw each line of text ================================================
     for i, line in enumerate(lines):
         (tw, th), _ = cv2.getTextSize(line, font, font_scale, thickness)
         tx = max(10, (w - tw) // 2)              # horizontally centred
@@ -864,39 +861,39 @@ def concat_clips_opencv(input_paths: list, out_path: str) -> str:
     return out_path
 
 
-# ── Normal trailer (original clips + captions burned in) ─────────────────────
+# == Normal trailer (original clips + captions burned in) =====================
 normal_parts = []
 for cid in top5:
     raw_path     = str(load_clip_path(cid))
     cap_path     = str(OUTPUT_DIR / f"captioned_{cid}.mp4")
     caption_text = clip_captions[int(cid)]["creepy"]
     add_caption_overlay_opencv(raw_path, caption_text, cap_path)
-    print(f"   Caption burned → captioned_{cid}.mp4")
+    print(f"   Caption burned -> captioned_{cid}.mp4")
     normal_parts.append(cap_path)
 
 trailer_path = str(OUTPUT_DIR / "trailer.mp4")
 concat_clips_opencv(normal_parts, trailer_path)
-print(f"   ✓ Trailer saved → {trailer_path}")
+print(f"   ✓ Trailer saved -> {trailer_path}")
 
-# ── Creepy trailer (transformed clips + captions burned in) ──────────────────
+# == Creepy trailer (transformed clips + captions burned in) ==================
 creepy_parts = []
 for idx, cid in enumerate(top5):
     raw_creepy   = creepy_paths[idx]
     cap_path     = str(OUTPUT_DIR / f"creepy_captioned_{cid}.mp4")
     caption_text = clip_captions[int(cid)]["creepy"]
     add_caption_overlay_opencv(raw_creepy, caption_text, cap_path)
-    print(f"   Caption burned → creepy_captioned_{cid}.mp4")
+    print(f"   Caption burned -> creepy_captioned_{cid}.mp4")
     creepy_parts.append(cap_path)
 
 creepy_trailer_path = str(OUTPUT_DIR / "creepy_trailer.mp4")
 concat_clips_opencv(creepy_parts, creepy_trailer_path)
-print(f"   ✓ Creepy trailer saved → {creepy_trailer_path}")
+print(f"   ✓ Creepy trailer saved -> {creepy_trailer_path}")
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+# =============================================================================
 # STEP 6 -- TRAILER EVALUATION
-# ─────────────────────────────────────────────────────────────────────────────
-print("\n── Step 6: Evaluating trailer impact scores ...")
+# =============================================================================
+print("\n== Step 6: Evaluating trailer impact scores ...")
 
 def evaluate_trailer_clip(clip_id: int) -> dict:
     """
@@ -976,7 +973,7 @@ for cid in tqdm(top5, desc="Evaluating trailer clips"):
 
 overall_avg = np.mean([r["avg_score"] for r in eval_results])
 overall_lbl = "+1 (High Impact)" if overall_avg >= 0.35 else "-1 (Low Impact)"
-print(f"\n   ══ FINAL TRAILER SCORE: {overall_avg:.4f}  →  {overall_lbl} ══")
+print(f"\n   ══ FINAL TRAILER SCORE: {overall_avg:.4f}  ->  {overall_lbl} ══")
 
 with open(OUTPUT_DIR / "evaluation_results.json", "w") as f:
     json.dump([{k: v for k, v in r.items()
@@ -984,15 +981,15 @@ with open(OUTPUT_DIR / "evaluation_results.json", "w") as f:
                for r in eval_results], f, indent=2, cls=NpEncoder)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+# =============================================================================
 # STEP 6B -- IMPACT TIMELINE GRAPH
-# ─────────────────────────────────────────────────────────────────────────────
-print("\n── Generating evaluation graphs ...")
+# =============================================================================
+print("\n== Generating evaluation graphs ...")
 
 fig, axes = plt.subplots(2, 1, figsize=(14, 9))
 fig.suptitle("Trailer Impact Score Evaluation", fontsize=15, fontweight="bold")
 
-# ── Plot 1: Frame-wise timeline for each trailer clip
+# == Plot 1: Frame-wise timeline for each trailer clip
 ax1 = axes[0]
 colors = plt.cm.tab10(np.linspace(0, 1, TOP_K))
 cumulative_t = 0.0
@@ -1015,7 +1012,7 @@ ax1.legend(fontsize=8, loc="upper right")
 ax1.set_ylim(0, 1)
 ax1.grid(alpha=0.3)
 
-# ── Plot 2: Per-clip summary bar chart
+# == Plot 2: Per-clip summary bar chart
 ax2 = axes[1]
 clip_ids = [r["clip_id"] for r in eval_results]
 avgs     = [r["avg_score"] for r in eval_results]
@@ -1047,17 +1044,17 @@ ax2.grid(axis="y", alpha=0.3)
 hi_patch  = mpatches.Patch(color="#e74c3c", label="High Impact (+1)")
 lo_patch  = mpatches.Patch(color="#3498db", label="Low Impact (-1)")
 ax2.legend(handles=[hi_patch, lo_patch,
-                    mpatches.Patch(color="none", label=f"Final trailer score: {overall_avg:.3f} → {overall_lbl}")],
+                    mpatches.Patch(color="none", label=f"Final trailer score: {overall_avg:.3f} -> {overall_lbl}")],
            fontsize=8, loc="upper right")
 
 plt.tight_layout()
 graph_path = str(OUTPUT_DIR / "impact_timeline.png")
 plt.savefig(graph_path, dpi=150)
 plt.close()
-print(f"   ✓ Impact timeline graph → {graph_path}")
+print(f"   ✓ Impact timeline graph -> {graph_path}")
 
 
-# ── Also plot: all-18-clips ranking
+# == Also plot: all-18-clips ranking
 fig2, ax = plt.subplots(figsize=(14, 5))
 bar_c = ["#e74c3c" if i in top5 else "#95a5a6" for i in range(NUM_CLIPS)]
 ax.bar(range(NUM_CLIPS), FINAL_SCORE, color=bar_c, edgecolor="black", linewidth=0.5)
@@ -1074,12 +1071,12 @@ plt.tight_layout()
 ranking_path = str(OUTPUT_DIR / "all_clips_ranking.png")
 plt.savefig(ranking_path, dpi=150)
 plt.close()
-print(f"   ✓ All-clips ranking graph → {ranking_path}")
+print(f"   ✓ All-clips ranking graph -> {ranking_path}")
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+# =============================================================================
 # FINAL SUMMARY
-# ─────────────────────────────────────────────────────────────────────────────
+# =============================================================================
 print(f"\n{'='*60}")
 print("  PIPELINE COMPLETE -- OUTPUT FILES")
 print(f"{'='*60}")
@@ -1094,9 +1091,9 @@ outputs = {
 }
 for label, path in outputs.items():
     exists = "✓" if (BASE_DIR / path).exists() else "✗"
-    print(f"  {exists}  {label:<28} → {path}")
+    print(f"  {exists}  {label:<28} -> {path}")
 
-print(f"\n  Final Trailer Score : {overall_avg:.4f}  →  {overall_lbl}")
+print(f"\n  Final Trailer Score : {overall_avg:.4f}  ->  {overall_lbl}")
 print(f"  Selected Clips      : {top5}")
 print(f"  Device used         : {DEVICE.upper()}")
 print(f"{'='*60}\n")
